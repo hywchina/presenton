@@ -91,6 +91,31 @@ def test_icon_finder_falls_back_to_bold_when_weighted_icon_missing(monkeypatch):
     assert icon_url.endswith("/static/icons/bold/chart-line-up-bold.svg")
 
 
+def test_icon_finder_lexical_mode_does_not_initialize_embedding(monkeypatch):
+    service = IconFinderService()
+    monkeypatch.setenv("ICON_SEARCH_MODE", "lexical")
+    monkeypatch.setattr(
+        service,
+        "_load_lexical_icons",
+        lambda: [
+            ("chart-line-up-bold", "chart line growth analytics"),
+            ("airplane-bold", "airplane travel flight"),
+        ],
+    )
+    embedding_init = Mock(side_effect=AssertionError("embedding must not initialize"))
+    monkeypatch.setattr(service, "_initialize_icons_collection", embedding_init)
+    monkeypatch.setattr(
+        service,
+        "_icon_url_for_weight",
+        lambda name, weight: f"/static/icons/{weight}/{name}.svg",
+    )
+
+    result = asyncio.run(service.search_icons("growth chart", k=1, weight="bold"))
+
+    assert result == ["/static/icons/bold/chart-line-up-bold.svg"]
+    embedding_init.assert_not_called()
+
+
 def test_process_slide_fetches_icons_with_template_weight(monkeypatch):
     captured = {}
 

@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import math
+import os
 import threading
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
@@ -115,8 +116,9 @@ def get_generate_kwargs(
         "messages": list(messages),
         "stream": stream,
     }
-    if max_tokens is not None:
-        kwargs["max_tokens"] = max_tokens
+    resolved_max_tokens = resolve_max_output_tokens(max_tokens)
+    if resolved_max_tokens is not None:
+        kwargs["max_tokens"] = resolved_max_tokens
     if tools:
         kwargs["tools"] = tools
     if response_format is not None:
@@ -129,6 +131,31 @@ def get_generate_kwargs(
         kwargs["extra_body"] = extra_body
 
     return kwargs
+
+
+def resolve_max_output_tokens(requested: Optional[int] = None) -> Optional[int]:
+    """Apply the optional deployment-wide output-token cap.
+
+    Local OpenAI-compatible servers commonly expose a smaller total context than
+    hosted providers. Without an explicit value, some clients request their own
+    large default and leave no room for the input prompt.
+    """
+    configured = (os.getenv("LLM_MAX_OUTPUT_TOKENS") or "").strip()
+    if not configured:
+        return requested
+    try:
+        cap = int(configured)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="LLM_MAX_OUTPUT_TOKENS must be a positive integer",
+        ) from exc
+    if cap <= 0:
+        raise HTTPException(
+            status_code=500,
+            detail="LLM_MAX_OUTPUT_TOKENS must be a positive integer",
+        )
+    return min(requested, cap) if requested is not None else cap
 
 
 def estimate_text_tokens(value: str) -> int:
@@ -304,6 +331,7 @@ async def generate_structured_with_schema_retries(
     validate_schema_max_loop_count: int = 4,
     disconnect_checker: Optional[DisconnectChecker] = None,
     text_chunk_callback: Optional[TextChunkCallback] = None,
+    max_tokens: Optional[int] = None,
 ) -> dict:
     """
     Parse retries (inner loop) plus optional JSON Schema validation feedback loops (outer loop),
@@ -328,6 +356,7 @@ async def generate_structured_with_schema_retries(
                     model=model,
                     messages=working_messages,
                     response_format=response_format,
+                    max_tokens=max_tokens,
                 ),
             )
             if content is not None:

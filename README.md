@@ -219,6 +219,9 @@ Create AI-powered presentations using your own model provider (BYOK) or run ever
 
 Presenton gives you complete control over your AI presentation workflow. Choose your models, customize your experience, and keep your data private.
 
+For a fully offline Qwen3-VL deployment with one API that returns DOCX,
+Markdown, or PPTX, see [Offline file-generation API](docs/offline-file-generation-api.md).
+
 - Custom Templates & Themes — Create unlimited presentation designs with HTML and Tailwind CSS
 - AI Template Generation — Create presentation templates from existing Powerpoint documents.
 - Flexible Generation — Build presentations from prompts or uploaded documents

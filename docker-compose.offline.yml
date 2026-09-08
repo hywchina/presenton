@@ -1,0 +1,49 @@
+# Offline runtime overrides for the unified file-generation API.
+#
+# Usage:
+#   QWEN3_VL_MODEL=<model-id> \
+#   docker compose -f docker-compose.yml -f docker-compose.offline.yml up production
+
+x-offline-qwen-environment: &offline-qwen-environment
+  LLM: custom
+  CUSTOM_LLM_URL: ${QWEN3_VL_BASE_URL:-http://host.docker.internal:18081/v1}
+  CUSTOM_LLM_API_KEY: ${QWEN3_VL_API_KEY:-rail-vllm-test-key}
+  CUSTOM_MODEL: ${QWEN3_VL_MODEL:-qwen3-vl-8b-instruct}
+  LLM_MAX_OUTPUT_TOKENS: ${QWEN3_VL_MAX_OUTPUT_TOKENS:-2048}
+  DISABLE_IMAGE_GENERATION: "true"
+  WEB_GROUNDING: "false"
+  MEM0_ENABLED: "false"
+  DISABLE_ANONYMOUS_TRACKING: "true"
+  CAN_CHANGE_KEYS: "false"
+  DISABLE_AUTH: ${DISABLE_AUTH:-true}
+  START_OLLAMA: "false"
+  HF_HUB_OFFLINE: "1"
+  TRANSFORMERS_OFFLINE: "1"
+  ICON_SEARCH_MODE: lexical
+  NO_PROXY: 127.0.0.1,localhost,host.docker.internal
+  no_proxy: 127.0.0.1,localhost,host.docker.internal
+
+services:
+  production:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      <<: *offline-qwen-environment
+
+  production-gpu:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      <<: *offline-qwen-environment
+
+  development:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      <<: *offline-qwen-environment
+
+  development-gpu:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      <<: *offline-qwen-environment

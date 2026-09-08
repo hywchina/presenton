@@ -2,6 +2,7 @@
 .env.*
 *.env
 .venv
+.python/
 __pycache__
 .pytest_cache
 .next
@@ -11,6 +12,8 @@ user_data
 app_data
 tmp
 debug
+.runtime/
+generated_outputs/
 .fastembed_cache
 .DS_Store
 
@@ -30,6 +33,7 @@ eng.traineddata
 # presenton-export runtime (downloaded via scripts/sync-presentation-export.cjs or Docker build)
 presentation-export/
 .cache/presentation-export/
+.cache/uv/
 servers/fastapi/build/
 servers/fastapi/dist/
 servers/fastapi/fastembed_cache/

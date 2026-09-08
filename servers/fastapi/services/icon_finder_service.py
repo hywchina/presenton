@@ -1,6 +1,8 @@
 import asyncio
+import hashlib
 import json
 import os
+import re
 from fastembed_vectorstore import FastembedEmbeddingModel, FastembedVectorstore
 from utils.asset_directory_utils import absolute_fastapi_asset_url
 from utils.icon_weights import (
@@ -28,8 +30,69 @@ class IconFinderService:
         self.model = FastembedEmbeddingModel.AllMiniLML6V2
         self.cache_directory = _icon_fastembed_cache_directory()
         self.vectorstore = None
+        self._lexical_icons: list[tuple[str, str]] | None = None
         self._initialized = False
         self._initialization_failed = False
+
+    @staticmethod
+    def _search_mode() -> str:
+        return (os.getenv("ICON_SEARCH_MODE") or "embedding").strip().lower()
+
+    def _load_lexical_icons(self) -> list[tuple[str, str]]:
+        if self._lexical_icons is not None:
+            return self._lexical_icons
+        icons_path = get_resource_path("assets/icons.json")
+        with open(icons_path, "r", encoding="utf-8") as icons_file:
+            payload = json.load(icons_file)
+        self._lexical_icons = [
+            (
+                icon["name"],
+                f'{icon["name"]} {icon.get("tags", "")}'.lower(),
+            )
+            for icon in payload.get("icons", [])
+            if isinstance(icon, dict)
+            and isinstance(icon.get("name"), str)
+            and icon["name"].endswith("-bold")
+        ]
+        return self._lexical_icons
+
+    def _search_icons_lexically(
+        self, query: str, k: int, weight: str | None
+    ) -> list[str]:
+        icons = self._load_lexical_icons()
+        if not icons or k <= 0:
+            return []
+        tokens = {
+            token
+            for token in re.findall(r"[a-z0-9]+", query.lower())
+            if len(token) > 1 and token != "icon"
+        }
+        scored = [
+            (
+                sum(
+                    token in set(re.findall(r"[a-z0-9]+", searchable))
+                    for token in tokens
+                ),
+                name,
+            )
+            for name, searchable in icons
+        ]
+        matches = sorted(
+            (item for item in scored if item[0] > 0),
+            key=lambda item: (-item[0], item[1]),
+        )
+        if not matches:
+            # Queries may be entirely non-Latin. Select a stable local icon rather
+            # than calling an embedding model or returning a network dependency.
+            start = int(hashlib.sha256(query.encode("utf-8")).hexdigest()[:8], 16)
+            start %= len(icons)
+            names = [icons[(start + offset) % len(icons)][0] for offset in range(k)]
+        else:
+            names = [name for _, name in matches[:k]]
+        return [
+            self._icon_url_for_weight(name, weight or DEFAULT_ICON_WEIGHT)
+            for name in names
+        ]
 
     def _initialize_icons_collection(self):
         if self._initialized or self._initialization_failed:
@@ -130,6 +193,11 @@ class IconFinderService:
             # Keep vectorstore as None so search_icons returns empty results
 
     def ensure_initialized(self) -> bool:
+        if self._search_mode() == "lexical":
+            try:
+                return bool(self._load_lexical_icons())
+            except (OSError, ValueError, TypeError):
+                return False
         if not self._initialized and not self._initialization_failed:
             self._initialize_icons_collection()
         return self.vectorstore is not None and not self._initialization_failed
@@ -163,6 +231,8 @@ class IconFinderService:
         )
 
     async def search_icons(self, query: str, k: int = 1, weight: str | None = None):
+        if self._search_mode() == "lexical":
+            return self._search_icons_lexically(query, k, weight)
         if not self.ensure_initialized():
             # Return empty list if vectorstore failed to initialize
             return []

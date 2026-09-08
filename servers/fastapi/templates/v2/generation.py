@@ -39,6 +39,7 @@ from templates.v2.tools import PREVIEW_SLIDE_TOOL_NAME, PreviewSlideTool
 from utils.asset_directory_utils import resolve_image_path_to_filesystem
 from utils.llm_config import get_llm_config
 from utils.llm_provider import get_model
+from utils.llm_utils import resolve_max_output_tokens
 
 DEFAULT_VALIDATION_RETRIES = 5
 MAX_PARALLEL_SLIDE_LAYOUTS = 10
@@ -1112,7 +1113,9 @@ def _generate_preview_candidate(
                 ),
             }
             if max_tokens is not None:
-                generate_kwargs["max_tokens"] = max_tokens
+                generate_kwargs["max_tokens"] = resolve_max_output_tokens(max_tokens)
+            elif (resolved_max_tokens := resolve_max_output_tokens()) is not None:
+                generate_kwargs["max_tokens"] = resolved_max_tokens
             if preview_tool_available:
                 generate_kwargs.update(
                     {
@@ -1352,7 +1355,7 @@ def _generate_with_validation_retries(
                     strict=False,
                     json_schema=output_model,
                 ),
-                max_tokens=max_tokens,
+                max_tokens=resolve_max_output_tokens(max_tokens),
             )
         except Exception as exc:
             last_error = exc

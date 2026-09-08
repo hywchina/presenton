@@ -1,4 +1,11 @@
-from utils.llm_utils import extract_structured_content, serialize_structured_content
+import pytest
+from fastapi import HTTPException
+
+from utils.llm_utils import (
+    extract_structured_content,
+    get_generate_kwargs,
+    serialize_structured_content,
+)
 from utils.schema_utils import (
     ensure_array_schemas_have_items,
     get_schema_validation_errors,
@@ -45,3 +52,18 @@ def test_ensure_array_schemas_have_items_adds_missing_items_recursively():
     assert fixed["properties"]["slides"]["items"]["properties"]["tags"]["items"] == {
         "type": "string"
     }
+
+
+def test_generate_kwargs_applies_deployment_output_token_cap(monkeypatch):
+    monkeypatch.setenv("LLM", "custom")
+    monkeypatch.setenv("LLM_MAX_OUTPUT_TOKENS", "2048")
+
+    assert get_generate_kwargs("model", [], max_tokens=16000)["max_tokens"] == 2048
+    assert get_generate_kwargs("model", [])["max_tokens"] == 2048
+
+
+def test_generate_kwargs_rejects_invalid_output_token_cap(monkeypatch):
+    monkeypatch.setenv("LLM_MAX_OUTPUT_TOKENS", "invalid")
+
+    with pytest.raises(HTTPException, match="positive integer"):
+        get_generate_kwargs("model", [])

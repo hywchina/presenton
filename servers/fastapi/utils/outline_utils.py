@@ -11,7 +11,8 @@ from models.presentation_outline_model import (
 HEADING_PATTERN = re.compile(r"^\s{0,3}#+\s*(.+)$", re.MULTILINE)
 FIRST_SENTENCE_PATTERN = re.compile(r"^\s*([^.?!]+?[.?!])", re.DOTALL)
 IMAGE_URL_PATTERN = re.compile(
-    r"https?://[-\w./%~:!$&'()*+,;=]+?\.(?:jpe?g|png|webp)(?:\?[^\s\"\'\\]*)?",
+    r"(?:https?://[-\w./%~:!$&'()*+,;=]+?|/app_data/[\w./%~!$&'()*+,;=@-]+?)"
+    r"\.(?:jpe?g|png|webp)(?:\?[^\s\"\'\\)]*)?",
     re.IGNORECASE | re.UNICODE,
 )
 
