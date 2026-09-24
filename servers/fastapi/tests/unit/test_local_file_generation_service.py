@@ -8,6 +8,8 @@ from unittest.mock import AsyncMock
 from docx import Document
 from fastapi import HTTPException, UploadFile
 from PIL import Image
+from pptx import Presentation
+from pptx.enum.shapes import MSO_SHAPE_TYPE
 import pytest
 
 from models.generated_file_plan import (
@@ -19,6 +21,7 @@ from models.generated_file_plan import (
 )
 from models.presentation_outline_model import SlideOutlineModel
 from services.local_file_generation_service import (
+    GeneratedReportMetadata,
     LocalFileGenerationService,
     PreparedInputImage,
 )
@@ -99,12 +102,25 @@ def test_render_markdown_embeds_image_in_single_file(tmp_path, monkeypatch):
     image = _prepared_image(tmp_path)
     service = LocalFileGenerationService()
 
-    generated = service.render_markdown(_document_plan(), [image], "report")
+    generated = service.render_markdown(
+        _document_plan(),
+        [image],
+        "report",
+        GeneratedReportMetadata(
+            project_name="示范项目",
+            report_type="客室设计方案报告",
+            requested_by="项目设计师",
+            generated_date="2026/09/24",
+        ),
+    )
     content = open(generated.path, encoding="utf-8").read()
 
     assert generated.extension == ".md"
     assert "# 离线分析报告" in content
-    assert "## 分析结果" in content
+    assert "## 报告信息" in content
+    assert "## 章节导航" in content
+    assert "## 1. 分析结果" in content
+    assert "*图 1 示例图片*" in content
     expected = base64.b64encode(image.data).decode("ascii")
     assert f"data:image/png;base64,{expected}" in content
 
@@ -152,6 +168,54 @@ def test_presentation_markdown_assigns_unplaced_images_and_local_urls(tmp_path):
         ["/app_data/images/image-0.png"],
         ["/app_data/images/image-1.png"],
     ]
+
+
+def test_render_presentation_uses_each_image_once_and_keeps_cover_clean(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("APP_DATA_DIRECTORY", str(tmp_path / "app-data"))
+    images = [_prepared_image(tmp_path, 0), _prepared_image(tmp_path, 1)]
+    plan = GeneratedPresentationPlan(
+        title="离线演示",
+        slides=[
+            GeneratedPresentationSlidePlan(
+                title="首页", content_markdown="项目概览", image_indices=[0]
+            ),
+            GeneratedPresentationSlidePlan(
+                title="设计背景", content_markdown="基于输入资料整理。"
+            ),
+            GeneratedPresentationSlidePlan(
+                title="方案说明", content_markdown="图片对应方案。", image_indices=[1]
+            ),
+        ],
+        image_captions=["图一", "图二"],
+    )
+
+    generated = LocalFileGenerationService().render_presentation(
+        plan,
+        images,
+        "presentation",
+        GeneratedReportMetadata(
+            project_name="示范项目",
+            report_type="客室设计方案报告",
+            generated_date="2026/09/24",
+        ),
+    )
+    presentation = Presentation(generated.path)
+
+    assert generated.extension == ".pptx"
+    assert len(presentation.slides) == 3
+    assert not [
+        shape
+        for shape in presentation.slides[0].shapes
+        if shape.shape_type == MSO_SHAPE_TYPE.PICTURE
+    ]
+    assert sum(
+        1
+        for slide in presentation.slides
+        for shape in slide.shapes
+        if shape.shape_type == MSO_SHAPE_TYPE.PICTURE
+    ) == 2
 
 
 def test_generate_document_plan_sends_image_content(monkeypatch, tmp_path):

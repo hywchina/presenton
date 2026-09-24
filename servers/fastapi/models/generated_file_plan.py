@@ -25,7 +25,7 @@ class GeneratedDocumentSectionPlan(BaseModel):
 
 class GeneratedDocumentPlan(BaseModel):
     title: str = Field(..., min_length=1, max_length=240)
-    summary: str = Field(default="", max_length=2000)
+    summary: str = Field(..., min_length=1, max_length=2000)
     sections: list[GeneratedDocumentSectionPlan] = Field(
         ..., min_length=1, max_length=30
     )

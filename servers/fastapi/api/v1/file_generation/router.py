@@ -8,18 +8,11 @@ from fastapi.responses import FileResponse
 from pathvalidate import sanitize_filename
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.v1.ppt.endpoints.presentation import (
-    _build_export_cookie_header,
-    check_if_api_request_is_valid,
-    generate_presentation_handler,
-)
-from enums.tone import Tone
-from enums.verbosity import Verbosity
 from models.generated_file_plan import GeneratedFileType
-from models.generate_presentation_request import GeneratePresentationRequest
 from services.database import get_async_session
 from services.local_file_generation_service import (
     GeneratedLocalFile,
+    GeneratedReportMetadata,
     LOCAL_FILE_GENERATION_SERVICE,
 )
 from utils.filename_utils import safe_export_basename
@@ -41,6 +34,10 @@ async def generate_file(
     language: Annotated[str, Form()] = "Chinese",
     n_slides: Annotated[int, Form(ge=1, le=20)] = 6,
     template: Annotated[str, Form()] = "general",
+    project_name: Annotated[str, Form()] = "",
+    report_type: Annotated[str, Form()] = "",
+    requested_by: Annotated[str, Form()] = "",
+    generated_date: Annotated[str, Form()] = "",
     sql_session: AsyncSession = Depends(get_async_session),
 ):
     """Generate one DOCX, Markdown, or PPTX file using the configured local VLM."""
@@ -53,6 +50,12 @@ async def generate_file(
         raise HTTPException(status_code=400, detail="language cannot be empty")
 
     prepared_images = await LOCAL_FILE_GENERATION_SERVICE.prepare_images(images)
+    metadata = GeneratedReportMetadata(
+        project_name=project_name.strip(),
+        report_type=report_type.strip(),
+        requested_by=requested_by.strip(),
+        generated_date=generated_date.strip(),
+    )
 
     if output_type in {GeneratedFileType.WORD, GeneratedFileType.MARKDOWN}:
         plan = await LOCAL_FILE_GENERATION_SERVICE.generate_document_plan(
@@ -62,10 +65,12 @@ async def generate_file(
             output_type=output_type,
         )
         generated = (
-            LOCAL_FILE_GENERATION_SERVICE.render_word(plan, prepared_images, filename)
+            LOCAL_FILE_GENERATION_SERVICE.render_word(
+                plan, prepared_images, filename, metadata
+            )
             if output_type == GeneratedFileType.WORD
             else LOCAL_FILE_GENERATION_SERVICE.render_markdown(
-                plan, prepared_images, filename
+                plan, prepared_images, filename, metadata
             )
         )
         return _generated_file_response(generated, filename)
@@ -76,49 +81,11 @@ async def generate_file(
         language=language.strip(),
         n_slides=n_slides,
     )
-    presentation_request = GeneratePresentationRequest(
-        content=text.strip() or plan.title,
-        slides_markdown=LOCAL_FILE_GENERATION_SERVICE.presentation_markdown(
-            plan, prepared_images
-        ),
-        instructions=(
-            "Use only the supplied offline content and uploaded images. "
-            "Do not browse, generate external image URLs, or introduce claims, "
-            "capabilities, statistics, citations, laws, or examples that are not "
-            "explicitly grounded in that content."
-        ),
-        tone=Tone.DEFAULT,
-        verbosity=Verbosity.STANDARD,
-        web_search=False,
-        n_slides=n_slides,
-        language=language.strip(),
-        template=template,
-        include_table_of_contents=False,
-        include_title_slide=True,
-        files=None,
-        export_as="pptx",
-        trigger_webhook=False,
-    )
-    (presentation_id,) = await check_if_api_request_is_valid(
-        presentation_request, sql_session
-    )
-    result = await generate_presentation_handler(
-        presentation_request,
-        presentation_id,
-        async_status=None,
-        export_cookie_header=_build_export_cookie_header(request),
-        request_http=request,
-        sql_session=sql_session,
-    )
-    generated = GeneratedLocalFile(
-        path=result.path,
-        title=plan.title,
-        media_type=(
-            "application/vnd.openxmlformats-officedocument."
-            "presentationml.presentation"
-        ),
-        extension=".pptx",
-        presentation_id=presentation_id,
+    generated = LOCAL_FILE_GENERATION_SERVICE.render_presentation(
+        plan,
+        prepared_images,
+        filename,
+        metadata,
     )
     return _generated_file_response(generated, filename)
 
