@@ -4,6 +4,7 @@ import path from "path";
 import { Readable } from "stream";
 import { NextRequest, NextResponse } from "next/server";
 import { authStatusForRequest } from "@/lib/server-auth-role";
+import { getSafeExportName } from "@/lib/export-output-path";
 
 const CONTENT_TYPES: Record<string, string> = {
   ".pdf": "application/pdf",
@@ -19,37 +20,6 @@ function getExportsDirectory(): string {
   return path.join(appDataDirectory, "exports");
 }
 
-function getSafeExportName(
-  request: NextRequest,
-  userId: string | null,
-  isAdmin: boolean,
-): string | null {
-  const decodedName = request.nextUrl.searchParams.get("name");
-
-  if (
-    !decodedName ||
-    decodedName.includes("\\") ||
-    path.isAbsolute(decodedName)
-  ) {
-    return null;
-  }
-
-  const normalized = path.normalize(decodedName);
-  if (
-    normalized === ".." ||
-    normalized.startsWith(`..${path.sep}`)
-  ) {
-    return null;
-  }
-  if (!userId) return normalized;
-
-  const parts = normalized.split(path.sep);
-  if (parts[0] === "users") {
-    return parts.length >= 3 && parts[1] === userId ? normalized : null;
-  }
-  return isAdmin && parts.length === 1 ? normalized : null;
-}
-
 function contentDisposition(filename: string): string {
   const fallback = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
   return `attachment; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
@@ -61,7 +31,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ detail: "Unauthorized" }, { status: 401 });
   }
   const filename = getSafeExportName(
-    request,
+    request.nextUrl.searchParams.get("name"),
     auth.user_id,
     auth.role === "admin",
   );

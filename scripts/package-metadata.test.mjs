@@ -55,10 +55,12 @@ test("Docker and Electron use the same pinned presentation export", async () => 
     rootPackage.presentationExportVersion,
   );
   assert.match(dockerfile, /COPY package\.json \/app\//);
+  assert.match(dockerfile, /COPY presentation-export \/app\/presentation-export/);
   assert.match(
     dockerfile,
-    /sync-presentation-export\.cjs --force/,
+    /sync-presentation-export\.cjs --check-only/,
   );
+  assert.doesNotMatch(dockerfile, /sync-presentation-export\.cjs --force/);
   assert.match(dockerfileDev, /COPY package\.json package-lock\.json \/app\//);
   assert.match(
     dockerfileDev,

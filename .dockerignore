@@ -14,7 +14,6 @@ node_modules
 **/chroma
 .cache
 app_data
-presentation-export
 servers/fastapi/tests
 servers/fastapi/presenton_backend.egg-info
 servers/fastapi/.python-version

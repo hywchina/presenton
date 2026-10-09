@@ -1,6 +1,7 @@
-# syntax=docker/dockerfile:1.7
+ARG PRESENTON_PYTHON_IMAGE=python:3.11-slim-trixie
+ARG PRESENTON_NODE_IMAGE=node:20-bookworm-slim
 
-FROM python:3.11-slim-trixie AS fastapi-builder
+FROM ${PRESENTON_PYTHON_IMAGE} AS fastapi-builder
 
 WORKDIR /app/servers/fastapi
 
@@ -18,18 +19,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY servers/fastapi /app/servers/fastapi
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/venv/bin/python --no-deps .
-# mem0/spaCy BM25 lemmatization loads en_core_web_sm at runtime; spaCy tries pip to
-# download it otherwise. Runtime image has no pip in PATH (--without-pip venv).
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --python /opt/venv/bin/python \
-    "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
-ENV HF_HOME=/root/.cache/huggingface \
-    PRESENTON_FASTEMBED_ICON_CACHE_DIR=/root/.cache/presenton/fastembed-icons
-# Warm FastEmbed caches into the image (not a BuildKit cache mount, or HF weights would be missing).
-RUN /opt/venv/bin/python scripts/warm_fastembed_cache.py
+# Runtime model assets are delivered separately in models/presenton_models.
+# No model downloads are performed while building the application image.
 
 
-FROM node:20-bookworm-slim AS nextjs-builder
+FROM ${PRESENTON_NODE_IMAGE} AS nextjs-builder
 
 WORKDIR /app/servers/nextjs
 
@@ -44,7 +38,7 @@ RUN npm run build \
     && rm -rf .next-build/cache
 
 
-FROM node:20-bookworm-slim AS assets-builder
+FROM ${PRESENTON_NODE_IMAGE} AS assets-builder
 
 WORKDIR /app
 
@@ -64,15 +58,15 @@ RUN mkdir -p /app/document-extraction-liteparse \
 COPY electron/resources/document-extraction/liteparse_runner.mjs /app/document-extraction-liteparse/liteparse_runner.mjs
 COPY scripts/sync-presentation-export.cjs /app/scripts/sync-presentation-export.cjs
 # Bundled export still loads @img/sharp-* native addons from node_modules (not inlined).
-RUN rm -rf /app/presentation-export \
-    && EXPORT_RUNTIME_ARCH="${TARGETARCH}" node /app/scripts/sync-presentation-export.cjs --force \
+COPY presentation-export /app/presentation-export
+RUN EXPORT_RUNTIME_ARCH="${TARGETARCH}" node /app/scripts/sync-presentation-export.cjs --check-only \
     && find /app/presentation-export/py -maxdepth 1 -type f -name "convert-linux-*" -exec chmod +x {} \; \
     && cd /app/presentation-export \
     && npm init -y \
     && npm install "sharp@^0.34.5" --include=optional --omit=dev --no-fund --no-audit --no-package-lock
 
 
-FROM python:3.11-slim-trixie AS runtime
+FROM ${PRESENTON_PYTHON_IMAGE} AS runtime
 
 WORKDIR /app
 
@@ -88,8 +82,9 @@ ENV APP_DATA_DIRECTORY=/app_data \
     EXPORT_RUNTIME_DIR=/app/presentation-export \
     BUILT_PYTHON_MODULE_PATH=/app/presentation-export/py/convert-linux-current \
     PRESENTON_APP_ROOT=/app \
-    HF_HOME=/root/.cache/huggingface \
-    PRESENTON_FASTEMBED_ICON_CACHE_DIR=/root/.cache/presenton/fastembed-icons \
+    HF_HOME=/models/presenton_models/huggingface \
+    PRESENTON_FASTEMBED_ICON_CACHE_DIR=/models/presenton_models/fastembed-icons \
+    MEM0_SPACY_MODEL=/models/presenton_models/spacy/en_core_web_sm-3.8.0 \
     PATH="/opt/venv/bin:${PATH}" \
     NODE_ENV=production \
     START_OLLAMA=false \
@@ -129,8 +124,6 @@ RUN mkdir -p /app_data/exports /app_data/images /app_data/uploads /app_data/font
 
 COPY --from=fastapi-builder /opt/venv /opt/venv
 COPY --from=fastapi-builder /app/servers/fastapi /app/servers/fastapi
-COPY --from=fastapi-builder /root/.cache/huggingface /root/.cache/huggingface
-COPY --from=fastapi-builder /root/.cache/presenton/fastembed-icons /root/.cache/presenton/fastembed-icons
 COPY templates /app/templates
 
 COPY --from=assets-builder /app/package.json /app/package.json
