@@ -1,3 +1,5 @@
+轨道客室系统的当前 Ubuntu 集成部署、Qwen3-VL 和 OCR 本地模型要求见 [系统部署说明](docs/rail-system-deployment.md)，报告 API 见 [离线文件生成 API](docs/offline-file-generation-api.md)。下列上游云服务/模型提供商选项不属于本系统的本地模型部署流程。
+
 <p align="center">
   <img src="./readme_assets/images/logo.png" alt="Presenton" />
 </p>

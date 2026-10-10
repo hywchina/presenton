@@ -1,5 +1,11 @@
 # Offline Qwen3-VL file-generation API
 
+For the rail-system Ubuntu delivery updated on 2026-10-10, use
+[the integrated deployment guide](rail-system-deployment.md). The integrated
+image tag is `rail-presenton:2026.10.10`; `code/deployment/compose.yaml` uses
+the internal `vllm:8000` endpoint. Host gateway examples below apply only to
+standalone development, not the integrated runtime.
+
 Presenton exposes one multipart API that accepts text plus up to eight images and
 returns one generated file. Runtime inference uses the configured local
 OpenAI-compatible Qwen3-VL endpoint only. Markdown, DOCX, and PPTX are rendered
@@ -137,11 +143,13 @@ docker compose \
   up --build production
 ```
 
-The rail-system root Compose builds `rail-presenton:1.0.0` from this project's
-Dockerfile. Python, Node, Chromium, fonts and OCR tools are image dependencies;
+The current rail-system deployment Compose builds `rail-presenton:2026.10.10`
+from this project's Dockerfile. Python, Node, Chromium, fonts and OCR tools are image dependencies;
 the prepared `presentation-export` runtime must exist in this project before
 the build. Qwen-VL and Presenton helper models stay outside the image and are
-mounted from the rail-system `models/` directory. Runtime generation is offline.
+mounted from the rail-system `models/` directory. OCR `eng.traineddata` and
+`osd.traineddata` must also be supplied locally via read-only mounts; the image
+installs the OCR program but does not download language weights. Runtime generation is offline.
 
 ## Runtime constraints
 

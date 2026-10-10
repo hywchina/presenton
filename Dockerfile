@@ -101,17 +101,30 @@ RUN set -eux; \
     libglib2.0-0t64 libgtk-3-0t64 libnspr4 libnss3 libpango-1.0-0 \
     libx11-6 libxcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 \
     libxkbcommon0 libxrandr2 libxshmfence1 libxss1 libxtst6"; \
-    if [ "$INSTALL_TESSERACT" = "true" ]; then packages="$packages tesseract-ocr tesseract-ocr-eng"; fi; \
+    if [ "$INSTALL_TESSERACT" = "true" ]; then packages="$packages libtesseract5"; fi; \
     apt-get update; \
     apt-get install -y --no-install-recommends --allow-downgrades \
     $packages \
     chromium="${CHROMIUM_VERSION}" \
     chromium-common="${CHROMIUM_VERSION}" \
     chromium-driver="${CHROMIUM_VERSION}"; \
-    apt-mark hold chromium chromium-common chromium-driver; \
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -; \
-    apt-get install -y --no-install-recommends nodejs; \
-    rm -rf /var/lib/apt/lists/*
+    apt-mark hold chromium chromium-common chromium-driver
+
+# The language packages contain model weights. Install only the OCR program
+# and its libraries; eng/osd.traineddata are supplied by read-only model mounts.
+RUN set -eux; \
+    if [ "$INSTALL_TESSERACT" = "true" ]; then \
+      mkdir /tmp/rail-tesseract-program; \
+      cd /tmp/rail-tesseract-program; \
+      apt-get download tesseract-ocr; \
+      for package in tesseract-ocr_*.deb; do dpkg-deb --extract "$package" /; rm "$package"; done; \
+      cd /; rmdir /tmp/rail-tesseract-program; \
+      test -z "$(find /usr/share/tesseract-ocr -name '*.traineddata' -print)"; \
+    fi
+
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
 
 # Remove any non-Noto fonts that may have been installed as dependencies.
 RUN find /usr/share/fonts -type f ! -iname 'Noto*' -delete \

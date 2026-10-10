@@ -13,6 +13,8 @@ services:
     volumes:
       - ./app_data:/app_data
       - ./servers/fastapi/templates:/app/servers/fastapi/templates:ro
+      - ${PRESENTON_MODEL_ROOT:-../../models}/presenton_models/tesseract/eng.traineddata:/usr/share/tesseract-ocr/5/tessdata/eng.traineddata:ro
+      - ${PRESENTON_MODEL_ROOT:-../../models}/presenton_models/tesseract/osd.traineddata:/usr/share/tesseract-ocr/5/tessdata/osd.traineddata:ro
     environment:
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
       - PRESENTON_HOST_HTTP_PORT=${PRESENTON_HOST_HTTP_PORT:-5001}
@@ -134,6 +136,8 @@ services:
       - "1455:1455"
     volumes:
       - ./app_data:/app_data
+      - ${PRESENTON_MODEL_ROOT:-../../models}/presenton_models/tesseract/eng.traineddata:/usr/share/tesseract-ocr/5/tessdata/eng.traineddata:ro
+      - ${PRESENTON_MODEL_ROOT:-../../models}/presenton_models/tesseract/osd.traineddata:/usr/share/tesseract-ocr/5/tessdata/osd.traineddata:ro
     environment:
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
       - PRESENTON_HOST_HTTP_PORT=${PRESENTON_HOST_HTTP_PORT:-5000}
