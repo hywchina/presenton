@@ -110,3 +110,32 @@ def _generated_file_response(
         filename=requested,
         headers=headers,
     )
+
+
+@FILE_GENERATION_ROUTER.post("/template-plan")
+async def template_report_plan(
+    source: Annotated[str, Form(max_length=250_000)],
+    images: Annotated[list[UploadFile] | None, File()] = None,
+):
+    """AI content plan only; Rail renders the original reviewed Office template."""
+    from pydantic import ValidationError
+    from models.template_report_plan import TemplateReportSource
+    from services.template_report_plan_service import generate_template_report_plan
+
+    try:
+        parsed = TemplateReportSource.model_validate_json(source)
+    except ValidationError as exc:
+        raise HTTPException(400, "Invalid template report source") from exc
+    prepared = await LOCAL_FILE_GENERATION_SERVICE.prepare_images(images)
+    try:
+        return await generate_template_report_plan(parsed, prepared)
+    except ValidationError as exc:
+        raise HTTPException(502, "The model returned an invalid combined template plan") from exc
+    finally:
+        # Plan-only requests do not create file-generation history. Do not leave
+        # per-request preview copies in the AI service after success or failure.
+        for image in prepared:
+            try:
+                os.unlink(image.path)
+            except FileNotFoundError:
+                pass

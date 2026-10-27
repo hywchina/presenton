@@ -859,3 +859,12 @@ Prepend your server’s root URL to <code>path</code> and
 ### 🚀 Roadmap
 
 Track the public roadmap on GitHub Projects: [https://github.com/orgs/presenton/projects/2](https://github.com/orgs/presenton/projects/2)
+
+### Rail template-constrained reports — 2026-10-27
+
+Rail's uploaded DOCX/PPTX reports now use the independent
+`/api/v1/generate-file/template-plan` endpoint for AI content planning. Native
+Office rendering, template uploads, project access and immutable job snapshots
+remain in the main Rail platform repository. Both template and AI modes follow
+that same reviewed source template; the legacy binary-generation endpoint remains
+available for existing clients. See [offline file generation API](docs/offline-file-generation-api.md).

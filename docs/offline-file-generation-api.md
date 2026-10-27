@@ -166,3 +166,45 @@ installs the OCR program but does not download language weights. Runtime generat
 - The supplied model advertises an 8192-token context window, so the offline
   profile caps output at 2048 tokens and preserves room for template schemas,
   prompts, and images.
+
+## Rail reviewed-template content plans (2026-10-27)
+
+`POST /api/v1/generate-file/template-plan` is a separate content-only endpoint for
+the Rail platform's uploaded DOCX/PPTX templates. It does **not** return an Office
+file and does not reinterpret the legacy `template` form field as an uploaded
+file. The existing binary endpoint above remains compatible for other callers.
+
+Multipart fields:
+
+- `source`: JSON (`TemplateReportSource`) containing title, summary, project name,
+  template rules, ordered chapters (`id`, `title`, source `body`, images with
+  occurrence `id` / caption / name), and `preview_ids`.
+- `images`: up to eight representative preview files, in `preview_ids` order.
+  Only four previews are used in any one model request, matching the current
+  deployed Qwen3-VL limit. All source image positions remain in the JSON, up to
+  twenty per chapter. The model sees shortened captions for representative previews;
+  unpreviewed positions keep source order. Full original captions remain with the
+  platform renderer. The model must not claim to have inspected unpreviewed images.
+
+Response: `{"sections":[{"id":0,"body":"...","image_ids":["0:0"]}]}`.
+The chapter IDs/order and the exact multiset of supplied image occurrence IDs must
+match. Empty or omitted source content and missing numeric constraints fail the
+request. Native fonts, master slides, page structure, final images and template
+versions remain in Rail's main repository/renderer. AI calls and model dependencies
+remain in this independent service/image. No arbitrary model-produced XML, code,
+asset URLs or coordinates enter the main renderer.
+
+Long source chapters are planned in ordered chunks of about 600 characters to
+respect the local 8K context and 2048-token output budgets. Guided schemas use
+source-specific chapter IDs, allowed image IDs and exact counts; duplicate checks
+remain server-side because the tested vLLM rejects `uniqueItems`. No model download or
+internet access is required. Preview files created only for this plan request are
+removed after success or failure. Invalid input returns 400; invalid model output
+or inference failure returns 502. Review generated semantics against source data;
+structural and numeric checks are not a proof of complete factual correctness.
+
+The platform and this image must be updated together for new Office report jobs.
+Rail continues to configure `REPORT_AI_API_URL` with `/api/v1/generate-file` and
+appends `/template-plan` for this contract. Old service versions fail explicitly
+instead of silently falling back to an unrelated fixed layout. Markdown and
+historical jobs keep their previous behavior.

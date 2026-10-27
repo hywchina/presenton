@@ -128,17 +128,25 @@ class LocalFileGenerationService:
             return []
 
         normalized_images: list[PreparedInputImage] = []
-        for index, (name, data) in enumerate(raw_images):
-            # Keep memory bounded by normalizing one image at a time while moving
-            # Pillow's CPU-bound codec work off the async request loop.
-            normalized_images.append(
-                await asyncio.to_thread(
-                    self._normalize_and_store_image,
-                    index,
-                    name,
-                    data,
+        try:
+            for index, (name, data) in enumerate(raw_images):
+                # Keep memory bounded by normalizing one image at a time while moving
+                # Pillow's CPU-bound codec work off the async request loop.
+                normalized_images.append(
+                    await asyncio.to_thread(
+                        self._normalize_and_store_image,
+                        index,
+                        name,
+                        data,
+                    )
                 )
-            )
+        except BaseException:
+            for image in normalized_images:
+                try:
+                    os.unlink(image.path)
+                except OSError:
+                    LOGGER.warning("Could not remove a failed request's preview image")
+            raise
         return normalized_images
 
     @staticmethod
